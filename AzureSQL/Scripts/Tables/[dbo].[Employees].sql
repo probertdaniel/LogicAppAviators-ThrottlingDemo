@@ -14,14 +14,14 @@ SET QUOTED_IDENTIFIER ON
 GO
 
 CREATE TABLE [dbo].[Employees](
-	[EmployeeMessageId] [int] IDENTITY(1,1) NOT NULL,
-	[ControlStatus] [nvarchar](10) NOT NULL,
-	[TrackingId] [nvarchar](36) NULL,
-	[EmployeeId] [int] NULL,
-	[Role] [nvarchar](50) NULL,
-	[EmployeeMessage] [nvarchar](max) NULL,
-	[DateTimeInserted] [datetime2](7) NOT NULL,
-	[DateTimeUpdated] [datetime2](7) NULL,
+	[EmployeeMessageId]		[int] IDENTITY(1,1) NOT NULL,
+	[ControlStatus]			[nvarchar](10)		NOT NULL,
+	[TrackingId]			[nvarchar](36)			NULL,
+	[EmployeeId]			[int]				NOT NULL,
+	[Role]					[nvarchar](50)		NOT NULL,
+	[EmployeeMessage]		[nvarchar](max)			NULL,
+	[DateTimeInserted]		[datetime2](7)		NOT NULL,
+	[DateTimeUpdated]		[datetime2](7)			NULL,
  CONSTRAINT [PK_Employees] PRIMARY KEY CLUSTERED 
 (
 	[EmployeeMessageId] ASC

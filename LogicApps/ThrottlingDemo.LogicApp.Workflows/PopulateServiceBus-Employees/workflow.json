@@ -2357,7 +2357,7 @@
             "Send_Employee_message": {
               "inputs": {
                 "parameters": {
-                  "entityName": "@{coalesce(parameters('employeesConfig')?['topicName'], '(Topic Name not set)')}",
+                  "entityName": "@{coalesce(parameters('employeesConfig')?['serviceBusSubscriber']?['topicName'], '(Topic Name not set)')}",
                   "message": {
                     "contentData": "@outputs('Compose_Employee_Message')",
                     "contentType": "application/json",

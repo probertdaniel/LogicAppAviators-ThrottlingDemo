@@ -99,7 +99,7 @@ BEGIN
 			END
 
 		-- Check if we have any data to select
-		IF ((SELECT COUNT([EmployeeId]) FROM #TempEmployees) > 0)
+		IF ((SELECT COUNT([EmployeeMessageId]) FROM #TempEmployees) > 0)
 		BEGIN
 			-- Create the JSON data
 			DECLARE @JsonData nvarchar(max)
