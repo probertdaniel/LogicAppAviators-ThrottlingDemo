@@ -1,0 +1,215 @@
+{
+  "$schema": "http://schema.management.azure.com/schemas/2014-04-01-preview/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environment": {
+      "type": "string",
+      "defaultValue": "Dev"
+    },
+    "locationName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "locationShortName": {
+      "type": "string",
+      "defaultValue": "[tolower(take(replace(parameters('locationName'), ' ', ''), 3))]"
+    },
+    "instanceNumber": {
+      "type": "string",
+      "defaultValue": "01"
+    },
+    "storageAccountName": {
+      "type": "string",
+      "defaultValue": "[concat('sto', uniqueString(resourceGroup().id), if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), parameters('locationShortName'), parameters('instanceNumber'))]",
+      "metadata": {
+        "description": "Name of this storage account."
+      }
+    },
+    "storageAccountKind": {
+      "type": "string",
+      "defaultValue": "StorageV2",
+      "metadata": {
+        "description": "Kind (type) of storage account."
+      }
+    },
+    "coreResourceGroupName": {
+      "type": "string",
+      "defaultValue": "[concat('rg', '-', uniqueString(subscription().id), '-', if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), '-', 'core', '-', parameters('locationShortName'), '-', parameters('instanceNumber'))]",
+      "metadata": {
+        "description": "Name of the Resource Group where core services (e.g. SQL Server) are deployed."
+      }
+    },
+    "logAnalyticsLocationName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location of the Log Analytics workspace (which may be different than Resource Group)."
+      }
+    },
+    "logAnalyticsLocationShortName": {
+      "type": "string",
+      "defaultValue": "[tolower(take(replace(parameters('logAnalyticsLocationName'), ' ', ''), 3))]"
+    },
+    "logAnalyticsWorkspaceName": {
+      "type": "string",
+      "defaultValue": "[concat('loga', '-', uniqueString(resourceGroup().id), '-', if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), '-', 'core', '-', parameters('logAnalyticsLocationShortName'), '-', parameters('instanceNumber'))]",
+      "metadata": {
+        "description": "Name of the Log Analytics workspace to connect to."
+      }
+    },
+    "storageSkuName": {
+      "type": "string",
+      "defaultValue": "Standard_LRS",
+      "metadata": {
+        "description": "Name of the SKU (price) used for the storage account."
+      }
+    },
+    "storageSkuTier": {
+      "type": "string",
+      "defaultValue": "Standard",
+      "metadata": {
+        "description": "Tier for the SKU used for the storage account."
+      }
+    },
+    "storageAccessTier": {
+      "type": "string",
+      "defaultValue": "Hot",
+      "metadata": {
+        "description": "Tier for Access used for the storage account."
+      }
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {
+        "Environment": "dev"
+      },
+      "metadata": {
+        "description": "Tags for this resource."
+      }
+    }
+  },
+  "variables": {
+    "employeesTableName": "employees",
+    "logAnalyticsResourceId": "[resourceId(parameters('coreResourceGroupName'), 'microsoft.operationalinsights/workspaces', parameters('logAnalyticsWorkspaceName'))]",
+    "diagnosticSettingsName": "DefaultDiagnosticSettings"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2019-06-01",
+      "name": "[parameters('storageAccountName')]",
+      "location": "[parameters('locationName')]",
+      "tags": "[parameters('tags')]",
+      "sku": {
+        "name": "[parameters('storageSkuName')]",
+        "tier": "[parameters('storageSkuTier')]"
+      },
+      "kind": "[parameters('storageAccountKind')]",
+      "properties": {
+        "networkAcls": {
+          "bypass": "AzureServices",
+          "virtualNetworkRules": [],
+          "ipRules": [],
+          "defaultAction": "Allow"
+        },
+        "supportsHttpsTrafficOnly": true,
+        "encryption": {
+          "services": {
+            "file": {
+              "keyType": "Account",
+              "enabled": true
+            },
+            "blob": {
+              "keyType": "Account",
+              "enabled": true
+            }
+          },
+          "keySource": "Microsoft.Storage"
+        },
+        "accessTier": "[parameters('storageAccessTier')]"
+      },
+      "resources": [
+        {
+          "name": "[concat('default/', variables('employeesTableName'))]",
+          "type": "tableServices/tables",
+          "apiVersion": "2022-09-01",
+          "dependsOn": [
+            "[parameters('storageAccountName')]"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/providers/diagnosticSettings",
+      "apiVersion": "2021-05-01-preview",
+      "name": "[concat(parameters('storageAccountName'), '/Microsoft.Insights/', variables('diagnosticSettingsName'))]",
+      "location": "[parameters('locationName')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+      ],
+      "properties": {
+        "workspaceId": "[variables('logAnalyticsResourceId')]",
+        "logs": [
+        ],
+        "metrics": [
+          {
+            "category": "Transaction",
+            "enabled": true,
+            "retentionPolicy": {
+              "days": 0,
+              "enabled": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/providers/diagnosticSettings",
+      "apiVersion": "2021-05-01-preview",
+      "name": "[concat(parameters('storageAccountName'), '/blob/Microsoft.Insights/', variables('diagnosticSettingsName'))]",
+      "location": "[parameters('locationName')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+      ],
+      "properties": {
+        "workspaceId": "[variables('logAnalyticsResourceId')]",
+        "logs": [
+          {
+            "category": "StorageRead",
+            "enabled": true,
+            "retentionPolicy": {
+              "days": 0,
+              "enabled": false
+            }
+          },
+          {
+            "category": "StorageWrite",
+            "enabled": true,
+            "retentionPolicy": {
+              "days": 0,
+              "enabled": false
+            }
+          },
+          {
+            "category": "StorageDelete",
+            "enabled": true,
+            "retentionPolicy": {
+              "days": 0,
+              "enabled": false
+            }
+          }
+        ],
+        "metrics": [
+          {
+            "category": "Transaction",
+            "enabled": true,
+            "retentionPolicy": {
+              "days": 0,
+              "enabled": false
+            }
+          }
+        ]
+      }
+    }
+  ]
+  }

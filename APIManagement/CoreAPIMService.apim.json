@@ -1,0 +1,444 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environment": {
+      "type": "string",
+      "defaultValue": "Dev"
+    },
+    "companyName": {
+      "type": "string",
+      "defaultValue": "Contoso"
+    },
+    "companyEmail": {
+      "type": "string",
+      "defaultValue": "admin@contoso.com"
+    },
+    "administratorLastName": {
+      "type": "string",
+      "defaultValue": "Contoso"
+    },
+    "apimServiceName": {
+      "type": "string",
+      "defaultValue": "[concat('apim', '-', uniqueString(resourceGroup().id), '-', if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), '-', 'core', '-', parameters('locationShortName'), '-', parameters('instanceNumber'))]"
+    },
+    "logAnalyticsWorkspaceName": {
+      "type": "string",
+      "defaultValue": "[concat('loga', '-', uniqueString(resourceGroup().id), '-', if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), '-', 'core', '-', parameters('locationShortName'), '-', parameters('instanceNumber'))]"
+    },
+    "appInsightsInstanceName": {
+      "type": "string",
+      "defaultValue": "[concat('appins', '-', uniqueString(resourceGroup().id), '-', if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), '-', 'core', '-', parameters('locationShortName'), '-', parameters('instanceNumber'))]"
+    },
+    "appInsightsResourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]"
+    },
+    "locationName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "locationShortName": {
+      "type": "string",
+      "defaultValue": "[tolower(take(replace(parameters('locationName'), ' ', ''), 3))]"
+    },
+    "instanceNumber": {
+      "type": "string",
+      "defaultValue": "01"
+    },
+    "skuName": {
+      "type": "string",
+      "defaultValue": "Developer"
+    },
+    "administratorUserName": {
+      "type": "string",
+      "defaultValue": "Administrator"
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {
+        "Environment": "dev"
+      },
+      "metadata": {
+        "description": "Tags for this resource."
+      }
+    }
+  },
+  "variables": {
+    "logAnalyticsResourceId": "[resourceId('microsoft.operationalinsights/workspaces', parameters('logAnalyticsWorkspaceName'))]",
+    "diagnosticSettingsName": "DefaultDiagnosticSettings"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ApiManagement/service",
+      "apiVersion": "2020-06-01-preview",
+      "name": "[parameters('apimServiceName')]",
+      "location": "[parameters('locationName')]",
+      "tags": "[parameters('tags')]",
+      "sku": {
+        "name": "[parameters('skuName')]",
+        "capacity": 1
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "publisherEmail": "[parameters('companyEmail')]",
+        "publisherName": "[parameters('companyName')]",
+        "notificationSenderEmail": "apimgmt-noreply@mail.windowsazure.com",
+        "hostnameConfigurations": [
+          {
+            "type": "Proxy",
+            "hostName": "[concat(parameters('apimServiceName'), '.azure-api.net')]",
+            "negotiateClientCertificate": true,
+            "defaultSslBinding": true
+          }
+        ],
+        "customProperties": {
+          "Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Protocols.Tls10": "False",
+          "Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Protocols.Tls11": "False",
+          "Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Protocols.Ssl30": "False",
+          "Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Ciphers.TripleDes168": "False",
+          "Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Backend.Protocols.Tls10": "False",
+          "Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Backend.Protocols.Tls11": "False",
+          "Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Backend.Protocols.Ssl30": "False",
+          "Microsoft.WindowsAzure.ApiManagement.Gateway.Protocols.Server.Http2": "False"
+        },
+        "virtualNetworkType": "None",
+        "disableGateway": false,
+        "apiVersionConstraint": {}
+      }
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/loggers",
+      "name": "[concat(parameters('apimServiceName'), '/', parameters('appInsightsInstanceName'))]",
+      "apiVersion": "2021-12-01-preview",
+      "properties": {
+        "loggerType": "applicationInsights",
+        "description": null,
+        "credentials": {
+          "instrumentationKey": "{{AppInsightsCredentials}}"
+        },
+        "isBuffered": true
+      },
+      "resources": [],
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', parameters('apimServiceName'))]",
+        "[resourceId('Microsoft.ApiManagement/service/properties', parameters('apimServiceName'), 'appInsightsCredentials')]"
+      ]
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/diagnostics",
+      "apiVersion": "2021-12-01-preview",
+      "name": "[concat(parameters('apimServiceName'), '/applicationinsights')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', parameters('apimServiceName'))]",
+        "[resourceId('Microsoft.ApiManagement/service/loggers', parameters('apimServiceName'), parameters('appInsightsInstanceName'))]"
+      ],
+      "properties": {
+        "alwaysLog": "allErrors",
+        "httpCorrelationProtocol": "Legacy",
+        "verbosity": "information",
+        "logClientIp": true,
+        "loggerId": "[resourceId('Microsoft.ApiManagement/service/loggers', parameters('apimServiceName'), parameters('appInsightsInstanceName'))]",
+        "sampling": {
+          "samplingType": "fixed",
+          "percentage": 100
+        },
+        "frontend": {
+          "request": {
+            "headers": [],
+            "body": {
+              "bytes": 0
+            }
+          },
+          "response": {
+            "headers": [],
+            "body": {
+              "bytes": 0
+            }
+          }
+        },
+        "backend": {
+          "request": {
+            "headers": [],
+            "body": {
+              "bytes": 0
+            }
+          },
+          "response": {
+            "headers": [],
+            "body": {
+              "bytes": 0
+            }
+          }
+        }
+      }
+    },
+
+    {
+      "type": "Microsoft.ApiManagement/service/diagnostics/loggers",
+      "apiVersion": "2018-01-01",
+      "name": "[concat(parameters('apimServiceName'), '/applicationinsights', '/', parameters('appInsightsInstanceName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', parameters('apimServiceName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/diagnostics",
+      "apiVersion": "2021-12-01-preview",
+      "name": "[concat(parameters('apimServiceName'), '/azuremonitor')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', parameters('apimServiceName'))]"
+      ],
+      "properties": {
+        "logClientIp": true,
+        "loggerId": "[resourceId('Microsoft.ApiManagement/service/loggers', parameters('apimServiceName'), 'azuremonitor')]",
+        "sampling": {
+          "samplingType": "fixed",
+          "percentage": 100
+        },
+        "frontend": {
+          "request": {
+            "dataMasking": {
+              "queryParams": [
+                {
+                  "value": "*",
+                  "mode": "Hide"
+                }
+              ]
+            }
+          }
+        },
+        "backend": {
+          "request": {
+            "dataMasking": {
+              "queryParams": [
+                {
+                  "value": "*",
+                  "mode": "Hide"
+                }
+              ]
+            }
+          }
+        },
+        "resources": [
+          {
+            "type": "Microsoft.ApiManagement/service/diagnostics/loggers",
+            "apiVersion": "2018-01-01",
+            "name": "[concat(parameters('apimServiceName'), '/azuremonitor/azuremonitor')]",
+            "dependsOn": [
+              "[resourceId('Microsoft.ApiManagement/service', parameters('apimServiceName'))]"
+            ],
+            "resources": [
+              {
+                "type": "Microsoft.ApiManagement/service/diagnostics",
+                "apiVersion": "2021-12-01-preview",
+                "name": "[concat(parameters('apimServiceName'), '/azuremonitor')]",
+                "dependsOn": [
+                  "[resourceId('Microsoft.ApiManagement/service', parameters('apimServiceName'))]"
+                ],
+                "properties": {
+                  "logClientIp": true,
+                  "loggerId": "[resourceId('Microsoft.ApiManagement/service/loggers', parameters('apimServiceName'), 'azuremonitor')]",
+                  "sampling": {
+                    "samplingType": "fixed",
+                    "percentage": 100
+                  },
+                  "frontend": {
+                    "request": {
+                      "dataMasking": {
+                        "queryParams": [
+                          {
+                            "value": "*",
+                            "mode": "Hide"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "backend": {
+                    "request": {
+                      "dataMasking": {
+                        "queryParams": [
+                          {
+                            "value": "*",
+                            "mode": "Hide"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "resources": []
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/providers/diagnosticSettings",
+      "apiVersion": "2021-05-01-preview",
+      "name": "[concat(parameters('apimServiceName'), '/microsoft.insights/', variables('diagnosticSettingsName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', parameters('apimServiceName'))]"
+      ],
+      "properties": {
+        "workspaceId": "[variables('logAnalyticsResourceId')]",
+        "metrics": [
+          {
+            "category": "AllMetrics",
+            "enabled": true,
+            "retentionPolicy": {
+              "enabled": false,
+              "days": 0
+            }
+          }
+        ],
+        "logs": [
+          {
+            "categoryGroup": "audit",
+            "enabled": true,
+            "retentionPolicy": {
+              "days": 0,
+              "enabled": false
+            }
+          },
+          {
+            "categoryGroup": "allLogs",
+            "enabled": true,
+            "retentionPolicy": {
+              "days": 0,
+              "enabled": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/properties",
+      "name": "[concat(parameters('apimServiceName'), '/', 'appInsightsCredentials')]",
+      "apiVersion": "2019-01-01",
+      "properties": {
+        "displayName": "AppInsightsCredentials",
+        "value": "[reference(resourceId('Microsoft.Insights/components', parameters('appInsightsInstanceName')), '2018-05-01-preview').InstrumentationKey]",
+        "tags": null,
+        "secret": true
+      },
+      "resources": [],
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', parameters('apimServiceName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/groups",
+      "apiVersion": "2019-12-01",
+      "name": "[concat(parameters('apimServiceName'), '/developers')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', parameters('apimServiceName'))]"
+      ],
+      "properties": {
+        "displayName": "Developers",
+        "description": "Developers is a built-in group. Its membership is managed by the system. Signed-in users fall into this group.",
+        "type": "system"
+      }
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/groups",
+      "apiVersion": "2019-12-01",
+      "name": "[concat(parameters('apimServiceName'), '/guests')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', parameters('apimServiceName'))]"
+      ],
+      "properties": {
+        "displayName": "Guests",
+        "description": "Guests is a built-in group. Its membership is managed by the system. Unauthenticated users visiting the developer portal fall into this group.",
+        "type": "system"
+      }
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/policies",
+      "apiVersion": "2019-12-01",
+      "name": "[concat(parameters('apimServiceName'), '/policy')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', parameters('apimServiceName'))]"
+      ],
+      "properties": {
+        "value": "<!--\r\n    IMPORTANT:\r\n    - Policy elements can appear only within the <inbound>, <outbound>, <backend> section elements.\r\n    - Only the <forward-request> policy element can appear within the <backend> section element.\r\n    - To apply a policy to the incoming request (before it is forwarded to the backend service), place a corresponding policy element within the <inbound> section element.\r\n    - To apply a policy to the outgoing response (before it is sent back to the caller), place a corresponding policy element within the <outbound> section element.\r\n    - To add a policy position the cursor at the desired insertion point and click on the round button associated with the policy.\r\n    - To remove a policy, delete the corresponding policy statement from the policy document.\r\n    - Policies are applied in the order of their appearance, from the top down.\r\n-->\r\n<policies>\r\n  <inbound />\r\n  <backend>\r\n    <forward-request />\r\n  </backend>\r\n  <outbound />\r\n</policies>",
+        "format": "xml"
+      }
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/portalsettings",
+      "apiVersion": "2019-12-01",
+      "name": "[concat(parameters('apimServiceName'), '/signin')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', parameters('apimServiceName'))]"
+      ],
+      "properties": {
+        "enabled": false
+      }
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/portalsettings",
+      "apiVersion": "2019-12-01",
+      "name": "[concat(parameters('apimServiceName'), '/signup')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', parameters('apimServiceName'))]"
+      ],
+      "properties": {
+        "enabled": true,
+        "termsOfService": {
+          "enabled": false,
+          "consentRequired": false
+        }
+      }
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/products",
+      "apiVersion": "2019-12-01",
+      "name": "[concat(parameters('apimServiceName'), '/starter')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', parameters('apimServiceName'))]"
+      ],
+      "properties": {
+        "displayName": "Starter",
+        "description": "Subscribers will be able to run 5 calls/minute up to a maximum of 100 calls/week.",
+        "subscriptionRequired": true,
+        "approvalRequired": false,
+        "subscriptionsLimit": 1,
+        "state": "published"
+      }
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/products",
+      "apiVersion": "2019-12-01",
+      "name": "[concat(parameters('apimServiceName'), '/unlimited')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', parameters('apimServiceName'))]"
+      ],
+      "properties": {
+        "displayName": "Unlimited",
+        "description": "Subscribers have completely unlimited access to the API. Administrator approval is required.",
+        "subscriptionRequired": true,
+        "approvalRequired": true,
+        "subscriptionsLimit": 1,
+        "state": "published"
+      }
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/products/policies",
+      "apiVersion": "2019-12-01",
+      "name": "[concat(parameters('apimServiceName'), '/starter/policy')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service/products', parameters('apimServiceName'), 'starter')]",
+        "[resourceId('Microsoft.ApiManagement/service', parameters('apimServiceName'))]"
+      ],
+      "properties": {
+        "value": "<!--\r\n            IMPORTANT:\r\n            - Policy elements can appear only within the <inbound>, <outbound>, <backend> section elements.\r\n            - Only the <forward-request> policy element can appear within the <backend> section element.\r\n            - To apply a policy to the incoming request (before it is forwarded to the backend service), place a corresponding policy element within the <inbound> section element.\r\n            - To apply a policy to the outgoing response (before it is sent back to the caller), place a corresponding policy element within the <outbound> section element.\r\n            - To add a policy position the cursor at the desired insertion point and click on the round button associated with the policy.\r\n            - To remove a policy, delete the corresponding policy statement from the policy document.\r\n            - Position the <base> element within a section element to inherit all policies from the corresponding section element in the enclosing scope.\r\n            - Remove the <base> element to prevent inheriting policies from the corresponding section element in the enclosing scope.\r\n            - Policies are applied in the order of their appearance, from the top down.\r\n        -->\r\n<policies>\r\n  <inbound>\r\n    <rate-limit calls=\"5\" renewal-period=\"60\" />\r\n    <quota calls=\"100\" renewal-period=\"604800\" />\r\n    <base />\r\n  </inbound>\r\n  <backend>\r\n    <base />\r\n  </backend>\r\n  <outbound>\r\n    <base />\r\n  </outbound>\r\n</policies>",
+        "format": "xml"
+      }
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "apimRetryPolicy": {
+    "type": "Object",
+    "value": {
+      "count": 3,
+      "interval": "PT5S",
+      "type": "fixed"
+    }
+  },
+  "enableApimTrace": {
+    "type": "Bool",
+    "value": false,
+    "description": "Flag indicating if tracing should be enabled for calls to APIM."
+  },
+  "defaultServiceBusPollingTimeout": {
+    "type": "object",
+    "value": {
+      "unit": "Second",
+      "count": 5
+    }
+  },
+  "serviceBusSubscriberConfig": {
+    "description": "Options for the ServiceBus subscribe workflows",
+    "type": "object",
+    "value": {
+      "sbSubscriber": {
+        "recurrenceTrigger": {
+          "frequency": "Second",
+          "interval": 30,
+          "startHour": 0,
+          "startMinute": 0
+        }
+      }
+    }
+  },
+  "globalOptions": {
+    "description": "Options that apply to either all workflows, or specific workflows",
+    "type": "Object",
+    "value": {
+      "global": {
+        "employeeTopicName": "employees",
+        "retryLimit": 5,
+        "retryWaitInMins": 5,
+        "terminateOnError": true
+      },
+      "specific": {
+      }
+    }
+  },
+  "employeesConfig": {
+    "type": "object",
+    "value": {
+      "databaseSubscriber": {
+        "recurrenceTrigger": {
+          "frequency": "Second",
+          "interval": 15,
+          "messageBatchSize": 30,
+          "maximumWaitingRuns": 5
+        }
+      },
+      "serviceBusSubscriber": {
+        "recurrenceTrigger": {
+          "frequency": "Second",
+          "interval": 30,
+          "messageBatchSize": 30,
+          "maximumWaitingRuns": 5
+        },
+        "topicName": "employees",
+        "subscriptionName": "AllMessages"
+      }
+    }
+  }
+}

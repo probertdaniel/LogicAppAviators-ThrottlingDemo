@@ -1,0 +1,184 @@
+﻿{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environment": {
+      "type": "string",
+      "defaultValue": "Dev"
+    },
+    "locationName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "locationShortName": {
+      "type": "string",
+      "defaultValue": "[tolower(take(replace(parameters('locationName'), ' ', ''), 3))]"
+    },
+    "instanceNumber": {
+      "type": "string",
+      "defaultValue": "01"
+    },
+    "databaseName": {
+      "type": "string",
+      "defaultValue": "Employees",
+      "metadata": {
+        "description": "Name of this database."
+      }
+    },
+    "azureSQLServerName": {
+      "type": "string",
+      "defaultValue": "[concat('sql', '-', uniqueString(resourceGroup().id), '-', if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), '-', 'core', '-', parameters('locationShortName'), '-', parameters('instanceNumber'))]",
+      "metadata": {
+        "description": "Name of the Azure SQL Server where the database is to be deployed."
+      }
+    },
+    "coreResourceGroupName": {
+      "type": "string",
+      "defaultValue": "[concat('rg', '-', uniqueString(subscription().id), '-', if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), '-', 'core', '-', parameters('locationShortName'), '-', parameters('instanceNumber'))]",
+      "metadata": {
+        "description": "Name of the Resource Group where core services (e.g. SQL Server) are deployed."
+      }
+    },
+    "logAnalyticsLocationName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location of the Log Analytics workspace (which may be different than Resource Group)."
+      }
+    },
+    "logAnalyticsLocationShortName": {
+      "type": "string",
+      "defaultValue": "[tolower(take(replace(parameters('logAnalyticsLocationName'), ' ', ''), 3))]"
+    },
+    "logAnalyticsWorkspaceName": {
+      "type": "string",
+      "defaultValue": "[concat('loga', '-', uniqueString(resourceGroup().id), '-', if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), '-', 'core', '-', parameters('logAnalyticsLocationShortName'), '-', parameters('instanceNumber'))]",
+      "metadata": {
+        "description": "Name of the Log Analytics workspace to connect to."
+      }
+    },
+    "skuName": {
+      "defaultValue": "GP_Gen5",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the SKU to use for this database."
+      }
+    },
+    "skuTier": {
+      "defaultValue": "GeneralPurpose",
+      "type": "string",
+      "metadata": {
+        "description": "Tier of the SKU to use for this database."
+      }
+    },
+    "skuFamily": {
+      "defaultValue": "Gen5",
+      "type": "string",
+      "metadata": {
+        "description": "Family of the SKU to use for this database."
+      }
+    },
+    "skuCapacity": {
+      "defaultValue": 2,
+      "type": "int",
+      "metadata": {
+        "description": "Capacity of the SKU to use for this database."
+      }
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {
+        "Environment": "dev"
+      },
+      "metadata": {
+        "description": "Tags for this resource."
+      }
+    }
+  },
+  "variables": {
+    "logAnalyticsResourceId": "[resourceId('microsoft.operationalinsights/workspaces', parameters('logAnalyticsWorkspaceName'))]",
+    "diagnosticSettingsName": "DefaultDiagnosticSettings"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Sql/servers/databases",
+      "apiVersion": "2021-08-01-preview",
+      "name": "[concat(parameters('azureSQLServerName'), '/', parameters('databaseName'))]",
+      "location": "[parameters('locationName')]",
+      "tags": "[parameters('tags')]",
+      "sku": {
+        "name": "[parameters('skuName')]",
+        "tier": "[parameters('skuTier')]",
+        "family": "[parameters('skuFamily')]",
+        "capacity": "[parameters('skuCapacity')]"
+      },
+      "kind": "v12.0,user,vcore",
+      "properties": {
+        "collation": "SQL_Latin1_General_CP1_CI_AS",
+        "maxSizeBytes": 34359738368,
+        "catalogCollation": "SQL_Latin1_General_CP1_CI_AS",
+        "zoneRedundant": false,
+        "licenseType": "LicenseIncluded",
+        "readScale": "Disabled",
+        "requestedBackupStorageRedundancy": "Geo",
+        "maintenanceConfigurationId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Maintenance/publicMaintenanceConfigurations/SQL_Default')]",
+        "isLedgerOn": false
+      }
+    },
+    {
+      "type": "Microsoft.Sql/servers/databases/transparentDataEncryption",
+      "apiVersion": "2021-11-01-preview",
+      "name": "[concat(parameters('azureSQLServerName'), '/', parameters('databaseName'), '/Current')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers/databases', parameters('azureSQLServerName'), parameters('databaseName'))]"
+      ],
+      "properties": {
+        "state": "Enabled"
+      }
+    },
+    {
+      "type": "Microsoft.Sql/servers/databases/providers/diagnosticSettings",
+      "apiVersion": "2021-05-01-preview",
+      "name": "[concat(parameters('azureSQLServerName'), '/', parameters('databaseName'), '/Microsoft.Insights/', variables('diagnosticSettingsName'))]",
+      "location": "[parameters('locationName')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers/databases', parameters('azureSQLServerName'), parameters('databaseName'))]"
+      ],
+      "properties": {
+        "workspaceId": "[variables('logAnalyticsResourceId')]",
+        "logs": [
+          {
+            "categoryGroup": "audit",
+            "enabled": true,
+            "retentionPolicy": {
+              "days": 0,
+              "enabled": false
+            }
+          },
+          {
+            "categoryGroup": "allLogs",
+            "enabled": true,
+            "retentionPolicy": {
+              "days": 0,
+              "enabled": false
+            }
+          }
+        ],
+        "metrics": [
+          {
+            "category": "Basic",
+            "enabled": true
+          },
+          {
+            "category": "InstanceAndAppAdvanced",
+            "enabled": true
+          },
+          {
+            "category": "WorkloadManagement",
+            "enabled": true
+          }
+        ]
+      }
+    }
+  ]
+}

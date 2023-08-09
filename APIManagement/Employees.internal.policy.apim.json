@@ -1,0 +1,171 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environment": {
+      "type": "string",
+      "defaultValue": "Dev"
+    },
+    "apiName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "defaultValue": "[concat('employees', '-', 'internal', '-', 'api')]",
+      "metadata": {
+        "description": "Name of this API."
+      }
+    },
+    "apiDisplayName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "defaultValue": "Employees Internal API",
+      "metadata": {
+        "description": "Display name for this API."
+      }
+    },
+    "locationName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "locationShortName": {
+      "type": "string",
+      "defaultValue": "[tolower(take(replace(parameters('locationName'), ' ', ''), 3))]"
+    },
+    "instanceNumber": {
+      "type": "string",
+      "defaultValue": "01"
+    },
+    "apimServiceName": {
+      "type": "string",
+      "defaultValue": "[concat('apim', '-', uniqueString(resourceGroup().id), '-', if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), '-', 'core', '-', parameters('locationShortName'), '-', parameters('instanceNumber'))]"
+    },
+    "apimResourceGroupName": {
+      "type": "string",
+      "defaultValue": "[concat('rg', '-', uniqueString(subscription().id), '-', if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), '-', 'core', '-', parameters('locationShortName'), '-', parameters('instanceNumber'))]",
+      "metadata": {
+        "description": "Name of the Resource Group where the APIM instance is located."
+      }
+    },
+    "storageAccountName": {
+      "type": "string",
+      "defaultValue": "[concat('sto', uniqueString(resourceGroup().id), if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), parameters('locationShortName'),parameters('instanceNumber'))]",
+      "metadata": {
+        "description": "The name of the Storage Account used for Table storage."
+      }
+    },
+    "storageAccountResourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "Name of the Resource Group where the Storage Account is deployed."
+      }
+    },
+    "cacheTimeout": {
+      "defaultValue": "3600",
+      "type": "string",
+      "metadata": {
+        "description": "Amount of time (in seconds) that cache entries are cached for, before they are retrieved again."
+      }
+    },
+    "apimSubscriptionName": {
+      "type": "string",
+      "defaultValue": "employees-internal-api-subscription"
+    },
+    "apimSubscriptionDisplayName": {
+      "type": "string",
+      "defaultValue": "Employees Internal API Subscription"
+    },
+    "defaultLogicAppTimeout": {
+      "defaultValue": "120",
+      "type": "string",
+      "metadata": {
+        "description": "Amount of time (in seconds) that this API will wait when calling Logic Apps."
+      }
+    },
+    "defaultApiTimeout": {
+      "defaultValue": "120",
+      "type": "string",
+      "metadata": {
+        "description": "Amount of time (in seconds) that this API will wait when calling other APIs."
+      }
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {
+        "Environment": "dev"
+      },
+      "metadata": {
+        "description": "Tags for this resource."
+      }
+    }
+  },
+  "variables": {
+    "apiCacheTimeoutNamedValue": "EmployeesInternalApiCacheTimeout",
+    "apiCacheTimeoutNamedValueDisplayName": "EmployeesInternalApi-CacheTimeout",
+    "apiSubscriptionIdNamedValue": "EmployeesInternalApiSubscriptionId",
+    "apiSubscriptionIdNamedValueDisplayName": "EmployeesInternalApi-SubscriptionId",
+    "storageAccountNameNamedValue": "EmployeesInternalApiStorageAccountName",
+    "storageAccountNameNamedValueDisplayName": "EmployeesInternalApi-StorageAccountName",
+    "apimServiceResourceId": "[resourceId(parameters('apimResourceGroupName'), 'Microsoft.ApiManagement/service', parameters('apimServiceName'))]",
+    "apimMasterSubscriptionResourceId": "[resourceId(parameters('apimResourceGroupName'), 'Microsoft.ApiManagement/service/subscriptions', parameters('apimServiceName'), 'master')]",
+    "apimApiVersion": "[providers('Microsoft.ApiManagement', 'service').apiVersions[0]]",
+    "singleQuote": "'"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ApiManagement/service/apis/operations/policies",
+      "apiVersion": "2021-12-01-preview",
+      "name": "[concat(parameters('apimServiceName'), '/', parameters('apiName'), '/upsertemployee', '/policy')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service/namedValues', parameters('apimServiceName'), variables('storageAccountNameNamedValue'))]"
+      ],
+      "properties": {
+        "value": "<!--\r\n   Defines a policy to upsert an Employee to TableStorage.\r\n-->\r\n<policies>\r\n  <inbound>\r\n    <base />\r\n    <!--<rate-limit-by-key  calls=\"10\"\r\n              renewal-period=\"60\"\r\n              increment-condition=\"@(context.Response.StatusCode == 200)\"\r\n              counter-key=\"@(context.Request.IpAddress)\"\r\n              remaining-calls-variable-name=\"remainingCallsPerIP\"/>-->\r\n    <set-variable name=\"storageAccountName\" value=\"{{EmployeesInternalApi-StorageAccountName}}\" />\r\n    <set-variable name=\"employeeId\" value=\"@(System.Net.WebUtility.UrlDecode(context.Request.MatchedParameters[&quot;employeeId&quot;]))\" />\r\n    <set-variable name=\"role\" value=\"@(System.Net.WebUtility.UrlDecode(context.Request.MatchedParameters[&quot;role&quot;]))\" />\r\n    <set-variable name=\"apimBaseName\" value=\"@(context.Deployment.ServiceName)\" />\r\n    <send-request ignore-error=\"false\" timeout=\"20\" response-variable-name=\"managementResponse\" mode=\"copy\">\r\n      <set-url>@(string.Format(\"https://{0}.table.core.windows.net/employees(PartitionKey='{1}',RowKey='{2}')\", context.Variables.GetValueOrDefault&lt;string&gt;(\"storageAccountName\"), context.Variables.GetValueOrDefault&lt;string&gt;(\"employeeId\"), context.Variables.GetValueOrDefault&lt;string&gt;(\"role\")))</set-url>\r\n      <set-method>MERGE</set-method>\r\n      <set-header name=\"Content-Type\" exists-action=\"override\">\r\n        <value>application/json</value>\r\n      </set-header>\r\n      <set-header name=\"x-ms-version\" exists-action=\"override\">\r\n        <value>2020-10-02</value>\r\n      </set-header>\r\n      <set-header name=\"x-ms-date\" exists-action=\"override\">\r\n        <value>@(System.DateTime.UtcNow.ToString(\"R\"))</value>\r\n      </set-header>\r\n      <authentication-managed-identity resource=\"https://storage.azure.com/\" />\r\n    </send-request>\r\n    <choose>\r\n      <when condition=\"@(((IResponse)context.Variables[&quot;managementResponse&quot;]).Body == null)\">\r\n        <return-response>\r\n          <set-status code=\"500\" reason=\"Internal Server Error\" />\r\n          <set-body>@(\r\n                        new JObject(\r\n                            new JProperty(\"fault\", \r\n                                new JObject(\r\n                                        new JProperty(\"faultActor\", context.Variables.GetValueOrDefault&lt;string&gt;(\"managementUrl\")),\r\n                                        new JProperty(\"faultCode\", ((IResponse)context.Variables[\"managementResponse\"]).StatusCode),\r\n                                        new JProperty(\"faultReason\",((IResponse)context.Variables[\"managementResponse\"]).StatusReason),\r\n                                        new JProperty(\"faultCategory\", \"Error\"),\r\n                                        new JProperty(\"faultMessage\", \"No response returned from StorageAccount\")\r\n                                )\r\n                            )\r\n                        ).ToString()\r\n                    )</set-body>\r\n        </return-response>\r\n      </when>\r\n      <when condition=\"@(((IResponse)context.Variables[&quot;managementResponse&quot;]).StatusCode != 204)\">\r\n        <return-response>\r\n          <set-status code=\"500\" reason=\"Internal Server Error\" />\r\n          <set-header name=\"Content-Type\" exists-action=\"override\">\r\n            <value>application/json</value>\r\n          </set-header>\r\n          <set-body>@{\r\n                                var additionalDetails = string.Empty;\r\n                                return new JObject(\r\n                                    new JProperty(\"fault\", \r\n                                        new JObject(\r\n                                                new JProperty(\"faultActor\", context.Variables.GetValueOrDefault&lt;string&gt;(\"managementUrl\")),\r\n                                                new JProperty(\"faultCode\", ((IResponse)context.Variables[\"managementResponse\"]).StatusCode),\r\n                                                new JProperty(\"faultReason\",((IResponse)context.Variables[\"managementResponse\"]).StatusReason),\r\n                                                new JProperty(\"faultCategory\", \"Error\"),\r\n                                                new JProperty(\"faultMessage\", \"An error occurred trying to Upsert an Employee to Table Storage.\" + additionalDetails)\r\n                                        )\r\n                                    )\r\n                                ).ToString();\r\n                    }</set-body>\r\n        </return-response>\r\n      </when>\r\n      <otherwise>\r\n        <return-response>\r\n          <set-status code=\"200\" reason=\"OK\" />\r\n          <set-header name=\"Content-Type\" exists-action=\"override\">\r\n            <value>application/json</value>\r\n          </set-header>\r\n          <set-body>@(\r\n                        new JObject(\r\n                            new JProperty(\"status\", \"OK\"),\r\n                            new JProperty(\"code\", 200)\r\n                        ).ToString()\r\n                    )</set-body>\r\n        </return-response>\r\n      </otherwise>\r\n    </choose>\r\n  </inbound>\r\n  <backend>\r\n    <base />\r\n  </backend>\r\n  <outbound>\r\n    <base />\r\n  </outbound>\r\n  <on-error>\r\n    <base />\r\n  </on-error>\r\n</policies>",
+        "format": "xml"
+      }
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/namedValues",
+      "apiVersion": "2019-12-01",
+      "name": "[concat(parameters('apimServiceName'), '/', variables('apiCacheTimeoutNamedValue'))]",
+      "dependsOn": [
+      ],
+      "properties": {
+        "displayName": "[variables('apiCacheTimeoutNamedValueDisplayName')]",
+        "value": "[parameters('cacheTimeout')]",
+        "tags": [
+        ],
+        "secret": false
+      }
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/namedValues",
+      "apiVersion": "2019-12-01",
+      "name": "[concat(parameters('apimServiceName'), '/', variables('apiSubscriptionIdNamedValue'))]",
+      "dependsOn": [
+      ],
+      "properties": {
+        "displayName": "[variables('apiSubscriptionIdNamedValueDisplayName')]",
+        "tags": [
+        ],
+        "secret": true,
+        "value": "[subscription().subscriptionId]"
+      }
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/namedValues",
+      "apiVersion": "2019-12-01",
+      "name": "[concat(parameters('apimServiceName'), '/', variables('storageAccountNameNamedValue'))]",
+      "dependsOn": [
+      ],
+      "properties": {
+        "displayName": "[variables('storageAccountNameNamedValueDisplayName')]",
+        "value": "[parameters('storageAccountName')]",
+        "tags": [
+        ],
+        "secret": false
+      }
+    }
+  ]
+}

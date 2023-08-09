@@ -1,0 +1,91 @@
+﻿<!--
+   Defines a policy to upsert an Employee to TableStorage.
+-->
+<policies>
+    <inbound>
+        <base />
+        <set-variable name="storageAccountName" value="{{EmployeesInternalApi-StorageAccountName}}" />
+        <set-variable name="employeeId" value="@(System.Net.WebUtility.UrlDecode(context.Request.MatchedParameters["employeeId"]))" />
+        <set-variable name="role" value="@(System.Net.WebUtility.UrlDecode(context.Request.MatchedParameters["role"]))" />
+        <set-variable name="apimBaseName" value="@(context.Deployment.ServiceName)" />
+        <send-request ignore-error="false" timeout="20" response-variable-name="managementResponse" mode="copy">
+            <set-url>@(string.Format("https://{0}.table.core.windows.net/employees(PartitionKey='{1}',RowKey='{2}')", context.Variables.GetValueOrDefault<string>("storageAccountName"), context.Variables.GetValueOrDefault<string>("employeeId"), context.Variables.GetValueOrDefault<string>("role")))</set-url>
+            <set-method>MERGE</set-method>
+            <set-header name="Content-Type" exists-action="override">
+                <value>application/json</value>
+            </set-header>
+            <set-header name="x-ms-version" exists-action="override">
+                <value>2020-10-02</value>
+            </set-header>
+            <set-header name="x-ms-date" exists-action="override">
+                <value>@(System.DateTime.UtcNow.ToString("R"))</value>
+            </set-header>
+            <authentication-managed-identity resource="https://storage.azure.com/" />
+        </send-request>
+        <choose>
+            <when condition="@(((IResponse)context.Variables["managementResponse"]).Body == null)">
+                <return-response>
+                    <set-status code="500" reason="Internal Server Error" />
+                    <set-body>@(
+                        new JObject(
+                            new JProperty("fault", 
+                                new JObject(
+                                        new JProperty("faultActor", context.Variables.GetValueOrDefault<string>("managementUrl")),
+                                        new JProperty("faultCode", ((IResponse)context.Variables["managementResponse"]).StatusCode),
+                                        new JProperty("faultReason",((IResponse)context.Variables["managementResponse"]).StatusReason),
+                                        new JProperty("faultCategory", "Error"),
+                                        new JProperty("faultMessage", "No response returned from StorageAccount")
+                                )
+                            )
+                        ).ToString()
+                    )</set-body>
+                </return-response>
+            </when>
+            <when condition="@(((IResponse)context.Variables["managementResponse"]).StatusCode != 204)">
+                <return-response>
+                    <set-status code="500" reason="Internal Server Error" />
+                    <set-header name="Content-Type" exists-action="override">
+                        <value>application/json</value>
+                    </set-header>
+                    <set-body>@{
+                                var additionalDetails = string.Empty;
+                                return new JObject(
+                                    new JProperty("fault", 
+                                        new JObject(
+                                                new JProperty("faultActor", context.Variables.GetValueOrDefault<string>("managementUrl")),
+                                                new JProperty("faultCode", ((IResponse)context.Variables["managementResponse"]).StatusCode),
+                                                new JProperty("faultReason",((IResponse)context.Variables["managementResponse"]).StatusReason),
+                                                new JProperty("faultCategory", "Error"),
+                                                new JProperty("faultMessage", "An error occurred trying to Upsert an Employee to Table Storage." + additionalDetails)
+                                        )
+                                    )
+                                ).ToString();
+                    }</set-body>
+                </return-response>
+            </when>
+            <otherwise>
+                <return-response>
+                    <set-status code="200" reason="OK" />
+                    <set-header name="Content-Type" exists-action="override">
+                        <value>application/json</value>
+                    </set-header>
+                    <set-body>@(
+                        new JObject(
+                            new JProperty("status", "OK"),
+                            new JProperty("code", 200)
+                        ).ToString()
+                    )</set-body>
+                </return-response>
+            </otherwise>
+        </choose>
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>

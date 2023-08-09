@@ -1,0 +1,59 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|AnyCPU">
+      <Configuration>Debug</Configuration>
+      <Platform>AnyCPU</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|AnyCPU">
+      <Configuration>Release</Configuration>
+      <Platform>AnyCPU</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>88caa4cd-b94f-42e5-8e7b-7b4e1e314f3f</ProjectGuid>
+  </PropertyGroup>
+  <PropertyGroup>
+    <PrepareForBuildDependsOn>
+    </PrepareForBuildDependsOn>
+  </PropertyGroup>
+  <Import Condition=" Exists('Deployment.targets') " Project="Deployment.targets" />
+  <Import Project="$(MSBuildToolsPath)\Microsoft.Common.targets" />
+  <!-- vertag<:>start tokens<:>maj.min -->
+  <Import Condition=" Exists('$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Deployment\1.1\DeploymentProject.targets') " Project="$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Deployment\1.1\DeploymentProject.targets" />
+  <!-- vertag<:>end -->
+  <ItemGroup>
+    <Content Include="Deploy-LogicApp-Workflows.ps1" />
+    <Content Include="Assign-StoragePermissions.ps1" />
+    <None Include="Deployment.targets">
+      <Visible>False</Visible>
+    </None>
+    <Content Include="Deploy-AzureResourceGroup.ps1" />
+    <Content Include="Parameters\ThrottlingDemo.logicapp.dev.parameters.json" />
+    <Content Include="Parameters\ThrottlingDemo.logicapp.prd.parameters.json" />
+    <Content Include="Parameters\ThrottlingDemo.logicapp.tst.parameters.json" />
+    <Content Include="Parameters\ThrottlingDemo.logicapp.uat.parameters.json" />
+    <Content Include="ThrottlingDemo.logicapp.json" />
+    <None Include="ThrottlingDemo.LogicApp.Workflows\.funcignore" />
+    <None Include="ThrottlingDemo.LogicApp.Workflows\.gitignore" />
+    <None Include="ThrottlingDemo.LogicApp.Workflows\.vscode\extensions.json" />
+    <None Include="ThrottlingDemo.LogicApp.Workflows\.vscode\launch.json" />
+    <None Include="ThrottlingDemo.LogicApp.Workflows\.vscode\settings.json" />
+    <None Include="ThrottlingDemo.LogicApp.Workflows\.vscode\tasks.json" />
+    <None Include="ThrottlingDemo.LogicApp.Workflows\connections.json" />
+    <None Include="ThrottlingDemo.LogicApp.Workflows\DBSubscribe-CallAPIM\workflow.json" />
+    <None Include="ThrottlingDemo.LogicApp.Workflows\PopulateServiceBus-Employees\workflow.json" />
+    <None Include="ThrottlingDemo.LogicApp.Workflows\SBSubscribeAndSend-SplitOn\workflow.json" />
+    <None Include="ThrottlingDemo.LogicApp.Workflows\SBSubscribe-WriteToDB\workflow.json" />
+    <None Include="ThrottlingDemo.LogicApp.Workflows\host.json" />
+    <None Include="ThrottlingDemo.LogicApp.Workflows\local.settings.json" />
+    <None Include="ThrottlingDemo.LogicApp.Workflows\parameters.json" />
+    <None Include="ThrottlingDemo.LogicApp.Workflows\parameters.local.json" />
+    <None Include="ThrottlingDemo.LogicApp.Workflows\workflow-designtime\host.json" />
+    <None Include="ThrottlingDemo.LogicApp.Workflows\workflow-designtime\local.settings.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="ThrottlingDemo.LogicApp.Workflows\Artifacts\" />
+  </ItemGroup>
+  <Target Name="GetReferenceAssemblyPaths" />
+</Project>
