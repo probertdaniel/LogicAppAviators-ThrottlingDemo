@@ -4,22 +4,31 @@
 <policies>
     <inbound>
         <base />
+        <!--<rate-limit-by-key  calls="10"
+              renewal-period="60"
+              increment-condition="@(context.Response.StatusCode == 200)"
+              counter-key="@(context.Request.IpAddress)"
+              remaining-calls-variable-name="remainingCallsPerIP"/>-->
         <set-variable name="storageAccountName" value="{{EmployeesInternalApi-StorageAccountName}}" />
         <set-variable name="employeeId" value="@(System.Net.WebUtility.UrlDecode(context.Request.MatchedParameters["employeeId"]))" />
         <set-variable name="role" value="@(System.Net.WebUtility.UrlDecode(context.Request.MatchedParameters["role"]))" />
         <set-variable name="apimBaseName" value="@(context.Deployment.ServiceName)" />
-        <send-request ignore-error="false" timeout="20" response-variable-name="managementResponse" mode="copy">
+        <send-request ignore-error="false" timeout="20" response-variable-name="managementResponse" mode="new">
             <set-url>@(string.Format("https://{0}.table.core.windows.net/employees(PartitionKey='{1}',RowKey='{2}')", context.Variables.GetValueOrDefault<string>("storageAccountName"), context.Variables.GetValueOrDefault<string>("employeeId"), context.Variables.GetValueOrDefault<string>("role")))</set-url>
             <set-method>MERGE</set-method>
-            <set-header name="Content-Type" exists-action="override">
-                <value>application/json</value>
-            </set-header>
             <set-header name="x-ms-version" exists-action="override">
                 <value>2020-10-02</value>
             </set-header>
             <set-header name="x-ms-date" exists-action="override">
                 <value>@(System.DateTime.UtcNow.ToString("R"))</value>
             </set-header>
+            <set-header name="Content-Type" exists-action="override">
+                <value>application/json</value>
+            </set-header>
+            <set-header name="Accept" exists-action="override">
+                <value>application/json;odata=fullmetadata</value>
+            </set-header>
+            <set-body>@(context.Request.Body.As<string>(preserveContent: true))</set-body>
             <authentication-managed-identity resource="https://storage.azure.com/" />
         </send-request>
         <choose>

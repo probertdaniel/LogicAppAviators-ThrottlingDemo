@@ -58,7 +58,7 @@
       }
     },
     "skuName": {
-      "defaultValue": "GP_Gen5",
+      "defaultValue": "GP_S_Gen5",
       "type": "string",
       "metadata": {
         "description": "Name of the SKU to use for this database."
@@ -79,7 +79,7 @@
       }
     },
     "skuCapacity": {
-      "defaultValue": 2,
+      "defaultValue": 4,
       "type": "int",
       "metadata": {
         "description": "Capacity of the SKU to use for this database."
@@ -112,7 +112,7 @@
         "family": "[parameters('skuFamily')]",
         "capacity": "[parameters('skuCapacity')]"
       },
-      "kind": "v12.0,user,vcore",
+      "kind": "v12.0,user,vcore, serverless",
       "properties": {
         "collation": "SQL_Latin1_General_CP1_CI_AS",
         "maxSizeBytes": 34359738368,
