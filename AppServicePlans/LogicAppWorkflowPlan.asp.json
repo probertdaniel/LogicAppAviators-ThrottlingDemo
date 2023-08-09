@@ -1,0 +1,149 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environment": {
+      "type": "string",
+      "defaultValue": "Dev"
+    },
+    "locationName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "locationShortName": {
+      "type": "string",
+      "defaultValue": "[tolower(take(replace(parameters('locationName'), ' ', ''), 3))]"
+    },
+    "instanceNumber": {
+      "type": "string",
+      "defaultValue": "01"
+    },
+    "appServicePlanName": {
+      "type": "string",
+      "defaultValue": "[concat('aps', '-', uniqueString(resourceGroup().id), '-', if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), '-', 'core', '-', 'workflowstandard', '-', parameters('locationShortName'), '-', parameters('instanceNumber'))]"
+    },
+    "coreResourceGroupName": {
+      "type": "string",
+      "defaultValue": "[concat('rg', '-', uniqueString(subscription().id), '-', if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), '-', 'core', '-', parameters('locationShortName'), '-', parameters('instanceNumber'))]",
+      "metadata": {
+        "description": "Name of the Resource Group where core services (e.g. SQL Server) are deployed."
+      }
+    },
+    "logAnalyticsLocationName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location of the Log Analytics workspace (which may be different than Resource Group)."
+      }
+    },
+    "logAnalyticsLocationShortName": {
+      "type": "string",
+      "defaultValue": "[tolower(take(replace(parameters('logAnalyticsLocationName'), ' ', ''), 3))]"
+    },
+    "logAnalyticsWorkspaceName": {
+      "type": "string",
+      "defaultValue": "[concat('loga', '-', uniqueString(resourceGroup().id), '-', if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), '-', 'core', '-', parameters('logAnalyticsLocationShortName'), '-', parameters('instanceNumber'))]",
+      "metadata": {
+        "description": "Name of the Log Analytics workspace to connect to."
+      }
+    },
+    "aspSkuName": {
+      "type": "string",
+      "defaultValue": "WS1",
+      "metadata": {
+        "description": "Name of the SKU (price) used for this Standard Logic App app service plan."
+      }
+    },
+    "aspSkuTier": {
+      "type": "string",
+      "defaultValue": "WorkflowStandard",
+      "metadata": {
+        "description": "Tier for the SKU used for this Standard Logic App app service plan."
+      }
+    },
+    "aspSkuSize": {
+      "type": "string",
+      "defaultValue": "[parameters('aspSkuName')]",
+      "metadata": {
+        "description": "Size of the SKU used for this Standard Logic App app service plan."
+      }
+    },
+    "aspSkuFamily": {
+      "type": "string",
+      "defaultValue": "WS",
+      "metadata": {
+        "description": "Family for the SKU used for this Standard Logic App app service plan."
+      }
+    },
+    "aspSkuCapacity": {
+      "type": "int",
+      "defaultValue": 1,
+      "metadata": {
+        "description": "Capacity for the SKU used for this Standard Logic App app service plan."
+      }
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {
+        "Environment": "dev"
+      },
+      "metadata": {
+        "description": "Tags for this resource."
+      }
+    }
+  },
+  "variables": {
+    "logAnalyticsResourceId": "[resourceId('microsoft.operationalinsights/workspaces', parameters('logAnalyticsWorkspaceName'))]",
+    "diagnosticSettingsName": "DefaultDiagnosticSettings"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2018-02-01",
+      "name": "[parameters('appServicePlanName')]",
+      "location": "[parameters('locationName')]",
+      "tags": "[parameters('tags')]",
+      "sku": {
+        "name": "[parameters('aspSkuName')]",
+        "tier": "[parameters('aspSkuTier')]",
+        "size": "[parameters('aspSkuSize')]",
+        "family": "[parameters('aspSkuFamily')]",
+        "capacity": "[parameters('aspSkuCapacity')]"
+      },
+      "kind": "elastic",
+      "properties": {
+        "perSiteScaling": false,
+        "maximumElasticWorkerCount": 20,
+        "isSpot": false,
+        "reserved": false,
+        "isXenon": false,
+        "hyperV": false,
+        "targetWorkerCount": 0,
+        "targetWorkerSizeId": 0
+      }
+    },
+    {
+      "type": "Microsoft.Web/serverfarms/providers/diagnosticSettings",
+      "apiVersion": "2021-05-01-preview",
+      "name": "[concat(parameters('appServicePlanName'), '/Microsoft.Insights/', variables('diagnosticSettingsName'))]",
+      "location": "[parameters('locationName')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]"
+      ],
+      "properties": {
+        "workspaceId": "[variables('logAnalyticsResourceId')]",
+        "logs": [],
+        "metrics": [
+          {
+            "category": "AllMetrics",
+            "enabled": true,
+            "retentionPolicy": {
+              "days": 0,
+              "enabled": false
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

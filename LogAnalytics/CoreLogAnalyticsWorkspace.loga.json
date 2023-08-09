@@ -1,0 +1,56 @@
+﻿{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environment": {
+      "type": "string",
+      "defaultValue": "Dev"
+    },
+    "locationName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "locationShortName": {
+      "type": "string",
+      "defaultValue": "[tolower(take(replace(parameters('locationName'), ' ', ''), 3))]"
+    },
+    "instanceNumber": {
+      "type": "string",
+      "defaultValue": "01"
+    },
+    "logAnalyticsWorkspaceName": {
+      "type": "string",
+      "defaultValue": "[concat('loga', '-', uniqueString(resourceGroup().id), '-', if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), '-', 'core', '-', parameters('locationShortName'), '-', parameters('instanceNumber'))]"
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {
+        "Environment": "dev"
+      },
+      "metadata": {
+        "description": "Tags for this resource."
+      }
+    }
+  },
+  "variables": {},
+  "resources": [
+    {
+      "type": "microsoft.operationalinsights/workspaces",
+      "apiVersion": "2020-10-01",
+      "name": "[parameters('logAnalyticsWorkspaceName')]",
+      "location": "[parameters('locationName')]",
+      "tags": "[parameters('tags')]",
+      "properties": {
+        "sku": {
+          "name": "pergb2018"
+        },
+        "retentionInDays": 30,
+        "workspaceCapping": {
+          "dailyQuotaGb": -1
+        },
+        "publicNetworkAccessForIngestion": "Enabled",
+        "publicNetworkAccessForQuery": "Enabled"
+      }
+    }
+  ]
+}

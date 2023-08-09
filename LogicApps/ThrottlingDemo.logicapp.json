@@ -1,0 +1,503 @@
+﻿{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environment": {
+      "type": "string",
+      "defaultValue": "Dev"
+    },
+    "locationName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region that this Standard Logic App service should be deployed to."
+      }
+    },
+    "locationShortName": {
+      "type": "string",
+      "defaultValue": "[tolower(take(replace(parameters('locationName'), ' ', ''), 3))]"
+    },
+    "instanceNumber": {
+      "type": "string",
+      "defaultValue": "01"
+    },
+    "logicAppName": {
+      "type": "string",
+      "defaultValue": "[concat('logic', '-', uniqueString(resourceGroup().id), '-', if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), '-', 'core', '-', parameters('locationShortName'), '-', parameters('instanceNumber'))]",
+      "metadata": {
+        "description": "Name of this LogicApp."
+      }
+    },
+    "coreResourceGroupName": {
+      "type": "string",
+      "defaultValue": "[concat('rg', '-', uniqueString(subscription().id), '-', if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), '-', 'core', '-', parameters('locationShortName'), '-', parameters('instanceNumber'))]",
+      "metadata": {
+        "description": "Name of the core Resource Group where the common resources (e.g. APIM) are deployed."
+      }
+    },
+    "appServicePlanName": {
+      "type": "string",
+      "defaultValue": "[concat('aps', '-', uniqueString(resourceGroup().id), '-', if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), '-', 'core', '-', 'workflowstandard', '-', parameters('locationShortName'), '-', parameters('instanceNumber'))]",
+      "metadata": {
+        "description": "The name of the App Service Plan used by this Standard Logic App."
+      }
+    },
+    "storageAccountName": {
+      "type": "string",
+      "defaultValue": "[concat('sto', uniqueString(resourceGroup().id), if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), parameters('locationShortName'),parameters('instanceNumber'))]",
+      "metadata": {
+        "description": "The name of the Storage Account used by this Standard Logic App service."
+      }
+    },
+    "storageAccountResourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "Name of the Resource Group where the Storage Account is deployed."
+      }
+    },
+    "apimServiceName": {
+      "type": "string",
+      "defaultValue": "[concat('apim', '-', uniqueString(resourceGroup().id), '-', if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), '-', 'core', '-', parameters('locationShortName'), '-', parameters('instanceNumber'))]",
+      "metadata": {
+        "description": "Name of the APIM Service used for Internal API operations."
+      }
+    },
+    "azureSQLServerName": {
+      "type": "string",
+      "defaultValue": "[concat('sql', '-', uniqueString(resourceGroup().id), '-', if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), '-', 'core', '-', parameters('locationShortName'), '-', parameters('instanceNumber'))]",
+      "metadata": {
+        "description": "Name of the Azure SQL Server where the databases are deployed."
+      }
+    },
+    "serviceBusNamespaceName": {
+      "type": "string",
+      "defaultValue": "[concat('sb', '-', uniqueString(resourceGroup().id), '-', if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), '-', 'core', '-', parameters('locationShortName'), '-', parameters('instanceNumber'))]",
+      "metadata": {
+        "description": "Name of the ServiceBus Namespace to connect to."
+      }
+    },
+    "appInsightsInstanceName": {
+      "type": "string",
+      "defaultValue": "[concat('appins', '-', uniqueString(resourceGroup().id), '-', if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), '-', 'core', '-', parameters('locationShortName'), '-', parameters('instanceNumber'))]",
+      "metadata": {
+        "description": "Name of the AppInsights instance to connect to."
+      }
+    },
+    "logAnalyticsWorkspaceName": {
+      "type": "string",
+      "defaultValue": "[concat('loga', '-', uniqueString(resourceGroup().id), '-', if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), '-', 'core', '-', parameters('locationShortName'), '-', parameters('instanceNumber'))]",
+      "metadata": {
+        "description": "Name of the Log Analytics workspace to connect to."
+      }
+    },
+    "apimRetryPolicy": {
+      "defaultValue": {
+        "count": 3,
+        "interval": "PT5S",
+        "type": "fixed"
+      },
+      "type": "object",
+      "metadata": {
+        "description": "Retry Policy to use when calling APIM."
+      }
+    },
+    "serviceBusPublishPolicyName": {
+      "type": "string",
+      "defaultValue": "RootPubSubSharedAccessKey",
+      "metadata": {
+        "description": "Name of the Shared Access Policy to use to connect to ServiceBus for Publish operations."
+      }
+    },
+    "serviceBusSubscribePolicyName": {
+      "type": "string",
+      "defaultValue": "RootPubSubSharedAccessKey",
+      "metadata": {
+        "description": "Name of the Shared Access Policy to use to connect to ServiceBus for Subscribe operations."
+      }
+    },
+    "employeesDatabaseName": {
+      "type": "string",
+      "defaultValue": "Employees",
+      "metadata": {
+        "description": "Name of the Employees database."
+      }
+    },
+    "azureSQLServerEmployeesUserName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Azure SQL Server user used to access the Employee database."
+      }
+    },
+    "azureSQLServerEmployeesUserPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Password for the Azure SQL Server user used to access the Employee database."
+      }
+    },
+    "workflowStartupState": {
+      "type": "string",
+      "defaultValue": "Disabled",
+      "allowedValues": [ "Enabled", "Disabled" ],
+      "metadata": {
+        "description": "Indicates if workflows should be enabled or disabled on initial deployment"
+      }
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {
+        "Environment": "dev"
+      },
+      "metadata": {
+        "description": "Tags for this resource."
+      }
+    }
+  },
+  "variables": {
+    "apimServiceResourceId": "[resourceId(parameters('coreResourceGroupName'), 'Microsoft.ApiManagement/service', parameters('apimServiceName'))]",
+    "apimMasterSubscriptionResourceId": "[resourceId(parameters('coreResourceGroupName'), 'Microsoft.ApiManagement/service/subscriptions', parameters('apimServiceName'), 'master')]",
+    "apimApiVersion": "[providers('Microsoft.ApiManagement', 'service').apiVersions[0]]",
+    "azureSqlServerResourceId": "[resourceId(parameters('coreResourceGroupName'), 'Microsoft.Sql/servers', parameters('azureSQLServerName'))]",
+    "azureSqlApiVersion": "[providers('Microsoft.Sql', 'servers').apiVersions[0]]",
+    "logAnalyticsResourceId": "[resourceId(parameters('coreResourceGroupName'), 'Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName'))]",
+    "diagnosticSettingsName": "DefaultDiagnosticSettings"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2022-09-01",
+      "name": "[parameters('logicAppName')]",
+      "location": "[parameters('locationName')]",
+      "tags": "[parameters('tags')]",
+      "kind": "functionapp,workflowapp",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "enabled": true,
+        "hostNameSslStates": [
+          {
+            "name": "[concat(parameters('logicAppName'), '.azurewebsites.net')]",
+            "sslState": "Disabled",
+            "hostType": "Standard"
+          },
+          {
+            "name": "[concat(parameters('logicAppName'), '.scm.azurewebsites.net')]",
+            "sslState": "Disabled",
+            "hostType": "Repository"
+          }
+        ],
+        "serverFarmId": "[resourceId(parameters('coreResourceGroupName'), 'Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
+        "reserved": false,
+        "isXenon": false,
+        "hyperV": false,
+        "scmSiteAlsoStopped": false,
+        "clientAffinityEnabled": false,
+        "clientCertEnabled": false,
+        "clientCertMode": "Required",
+        "hostNamesDisabled": false,
+        "containerSize": 1536,
+        "dailyMemoryTimeQuota": 0,
+        "httpsOnly": false,
+        "redundancyMode": "None",
+        "storageAccountRequired": false,
+        "keyVaultReferenceIdentity": "SystemAssigned",
+        "siteConfig": {
+          "numberOfWorkers": 1,
+          "acrUseManagedIdentityCreds": false,
+          "alwaysOn": false,
+          "http20Enabled": false,
+          "functionAppScaleLimit": 0,
+          "minimumElasticInstanceCount": 1,
+          "appSettings": [
+            {
+              "name": "APP_KIND",
+              "value": "workflowApp"
+            },
+            {
+              "name": "AzureFunctionsJobHost__extensionBundle__id",
+              "value": "Microsoft.Azure.Functions.ExtensionBundle.Workflows"
+            },
+            {
+              "name": "AzureFunctionsJobHost__extensionBundle__version",
+              "value": "[1.*, 2.0.0)"
+            },
+            {
+              "name": "AzureWebJobsDashboard",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', parameters('storageAccountName'), ';AccountKey=', listKeys(resourceId(parameters('storageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts', parameters('storageAccountName')), providers('Microsoft.Storage', 'storageAccounts').apiVersions[0]).keys[0].value)]"
+            },
+            {
+              "name": "AzureWebJobsStorage",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', parameters('storageAccountName'), ';AccountKey=', listKeys(resourceId(parameters('storageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts', parameters('storageAccountName')), providers('Microsoft.Storage', 'storageAccounts').apiVersions[0]).keys[0].value)]"
+            },
+            {
+              "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+              "value": "[reference(resourceId(parameters('coreResourceGroupName'), 'Microsoft.Insights/components', parameters('appInsightsInstanceName')), '2015-05-01').InstrumentationKey]"
+            },
+            {
+              "name": "FUNCTIONS_EXTENSION_VERSION",
+              "value": "~4"
+            },
+            {
+              "name": "FUNCTIONS_WORKER_RUNTIME",
+              "value": "node"
+            },
+            {
+              "name": "WEBSITE_NODE_DEFAULT_VERSION",
+              "value": "~18"
+            },
+            {
+              "name": "environmentName",
+              "value": "[parameters('environment')]"
+            },
+            {
+              "name": "logicAppResourceGroupName",
+              "value": "[resourceGroup().name]"
+            },
+            {
+              "name": "logicAppName",
+              "value": "[parameters('logicAppName')]"
+            },
+            {
+              "name": "apiConnectionSubscriptionId",
+              "value": "[subscription().subscriptionId]"
+            },
+            {
+              "name": "apiConnectionResourceGroupName",
+              "value": "[resourceGroup().name]"
+            },
+            {
+              "name": "apiConnectionLocation",
+              "value": "[resourceGroup().location]"
+            },
+            {
+              "name": "apimBaseUrl",
+              "value": "[concat('https://', parameters('apimServiceName'), '.azure-api.net')]"
+            },
+            {
+              "name": "employeesApiPath",
+              "value": "employees/internal"
+            },
+            {
+              "name": "apimSubscriptionKey",
+              "value": "[reference(variables('apimMasterSubscriptionResourceId'), '2019-01-01').primaryKey]"
+            },
+            {
+              "name": "serviceBusPublishConnectionString",
+              "value": "[listKeys(resourceId(parameters('coreResourceGroupName'), 'Microsoft.ServiceBus/namespaces/AuthorizationRules', parameters('serviceBusNamespaceName'), parameters('serviceBusPublishPolicyName')), '2017-04-01').primaryConnectionString]"
+            },
+            {
+              "name": "serviceBusSubscribeConnectionString",
+              "value": "[listKeys(resourceId(parameters('coreResourceGroupName'), 'Microsoft.ServiceBus/namespaces/AuthorizationRules', parameters('serviceBusNamespaceName'), parameters('serviceBusSubscribePolicyName')), '2017-04-01').primaryConnectionString]"
+            },
+            {
+              "name": "dbConnectionString",
+              "value": "[concat('Server=tcp:', reference(variables('azureSqlServerResourceId'), variables('azureSqlApiVersion')).fullyQualifiedDomainName, ',1433;Initial Catalog=', parameters('employeesDatabaseName'),';Persist Security Info=False;User ID=', parameters('azureSQLServerEmployeesUserName'), ';Password=', parameters('azureSQLServerEmployeesUserPassword'), ';MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=240;')]"
+            },
+            {
+              "name": "azureStorageBlobEndpoint",
+              "value": "[concat('https://', parameters('storageAccountName'), '.blob.core.windows.net')]"
+            },
+            {
+              "name": "Workflows.SBSubscribeAndSend-SplitOn.FlowState",
+              "value": "[parameters('workflowStartupState')]"
+            },
+            {
+              "name": "Workflows.SBSubscribe-WriteToDB.FlowState",
+              "value": "[parameters('workflowStartupState')]"
+            },
+            {
+              "name": "Workflows.DBSubscribe-CallAPIM.FlowState",
+              "value": "[parameters('workflowStartupState')]"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites/config",
+      "apiVersion": "2022-09-01",
+      "name": "[concat(parameters('logicAppName'), '/web')]",
+      "location": "[parameters('locationName')]",
+      "tags": "[parameters('tags')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('logicAppName'))]"
+      ],
+      "properties": {
+        "numberOfWorkers": 1,
+        "defaultDocuments": [
+          "Default.htm",
+          "Default.html",
+          "Default.asp",
+          "index.htm",
+          "index.html",
+          "iisstart.htm",
+          "default.aspx",
+          "index.php"
+        ],
+        "netFrameworkVersion": "v6.0",
+        "phpVersion": "5.6",
+        "requestTracingEnabled": false,
+        "remoteDebuggingEnabled": false,
+        "httpLoggingEnabled": false,
+        "acrUseManagedIdentityCreds": false,
+        "logsDirectorySizeLimit": 35,
+        "detailedErrorLoggingEnabled": false,
+        "publishingUsername": "[concat('$', parameters('logicAppName'))]",
+        "scmType": "None",
+        "use32BitWorkerProcess": true,
+        "webSocketsEnabled": false,
+        "alwaysOn": false,
+        "managedPipelineMode": "Integrated",
+        "virtualApplications": [
+          {
+            "virtualPath": "/",
+            "physicalPath": "site\\wwwroot",
+            "preloadEnabled": false
+          }
+        ],
+        "loadBalancing": "LeastRequests",
+        "experiments": {
+          "rampUpRules": []
+        },
+        "autoHealEnabled": false,
+        "vnetRouteAllEnabled": false,
+        "vnetPrivatePortsCount": 0,
+        "cors": {
+          "allowedOrigins": [
+            "https://functions.azure.com",
+            "https://functions-staging.azure.com",
+            "https://functions-next.azure.com",
+            "https://afd.hosting.portal.azure.net",
+            "https://afd.hosting-ms.portal.azure.net",
+            "https://hosting.portal.azure.net",
+            "https://ms.hosting.portal.azure.net",
+            "https://ema-ms.hosting.portal.azure.net",
+            "https://ema.hosting.portal.azure.net",
+            "https://portal.azure.com"
+          ],
+          "supportCredentials": false
+        },
+        "localMySqlEnabled": false,
+        "managedServiceIdentityId": 11879,
+        "ipSecurityRestrictions": [
+          {
+            "ipAddress": "[concat(reference(variables('apimServiceResourceId'), variables('apimApiVersion'), 'Full').properties.publicIPAddresses[0], '/32')]",
+            "action": "Allow",
+            "tag": "Default",
+            "priority": 65000,
+            "name": "Allow APIM Access",
+            "description": "Allows traffic from API Management instance"
+          },
+          {
+            "ipAddress": "Any",
+            "action": "Allow",
+            "priority": 2147483647,
+            "name": "Allow all",
+            "description": "Allow all access"
+          }
+        ],
+        "scmIpSecurityRestrictions": [
+          {
+            "ipAddress": "Any",
+            "action": "Allow",
+            "priority": 1,
+            "name": "Allow all",
+            "description": "Allow all access"
+          }
+        ],
+        "scmIpSecurityRestrictionsUseMain": false,
+        "http20Enabled": false,
+        "minTlsVersion": "1.2",
+        "scmMinTlsVersion": "1.0",
+        "ftpsState": "AllAllowed",
+        "preWarmedInstanceCount": 1,
+        "functionAppScaleLimit": 0,
+        "functionsRuntimeScaleMonitoringEnabled": false,
+        "minimumElasticInstanceCount": 1,
+        "azureStorageAccounts": {}
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites/hostNameBindings",
+      "apiVersion": "2022-09-01",
+      "name": "[concat(parameters('logicAppName'), '/', parameters('logicAppName'), '.azurewebsites.net')]",
+      "location": "[parameters('locationName')]",
+      "tags": "[parameters('tags')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('logicAppName'))]"
+      ],
+      "properties": {
+        "siteName": "[parameters('logicAppName')]",
+        "hostNameType": "Verified"
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites/basicPublishingCredentialsPolicies",
+      "apiVersion": "2022-09-01",
+      "name": "[concat(parameters('logicAppName'), '/ftp')]",
+      "location": "UK South",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('logicAppName'))]"
+      ],
+      "tags": {
+      },
+      "properties": {
+        "allow": true
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites/basicPublishingCredentialsPolicies",
+      "apiVersion": "2022-09-01",
+      "name": "[concat(parameters('logicAppName'), '/scm')]",
+      "location": "UK South",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('logicAppName'))]"
+      ],
+      "tags": {
+      },
+      "properties": {
+        "allow": true
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites/providers/diagnosticSettings",
+      "apiVersion": "2021-05-01-preview",
+      "name": "[concat(parameters('logicAppName'), '/microsoft.insights/', variables('diagnosticSettingsName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('logicAppName'))]"
+      ],
+      "properties": {
+        "workspaceId": "[variables('logAnalyticsResourceId')]",
+        "metrics": [
+          {
+            "category": "AllMetrics",
+            "enabled": true,
+            "retentionPolicy": {
+              "enabled": false,
+              "days": 0
+            }
+          }
+        ],
+        "logs": [
+          {
+            "category": "FunctionAppLogs",
+            "enabled": "[if(equals(toLower(parameters('environment')), 'test'), 'true', 'false')]",
+            "retentionPolicy": {
+              "days": 0,
+              "enabled": false
+            }
+          },
+          {
+            "category": "WorkflowRuntime",
+            "enabled": "[if(equals(toLower(parameters('environment')), 'test'), 'true', 'false')]",
+            "retentionPolicy": {
+              "days": 0,
+              "enabled": false
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

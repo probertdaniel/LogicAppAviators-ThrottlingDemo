@@ -1,0 +1,27 @@
+﻿{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "locationName": {
+      "value": "East US"
+    },
+    "administratorLogin": {
+      "value": "dev-admin"
+    },
+    "administratorLoginPassword": {
+      "value": "Password1!"
+    },
+    "administratorAADLogin": {
+      "value": "(AdminName)"
+    },
+    "administratorAADObjectId": {
+      "value": "(AdminObjectId)"
+    },
+    "tags": {
+      "value": {
+        "ApplicationName": "ThrottlingDemo",
+        "Env": "dev"
+      }
+    }
+  }
+}

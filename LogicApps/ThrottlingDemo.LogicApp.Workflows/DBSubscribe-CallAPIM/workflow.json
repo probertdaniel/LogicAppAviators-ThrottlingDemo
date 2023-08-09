@@ -1,0 +1,154 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "actions": {
+      "Initialize_EventData_variable": {
+        "inputs": {
+          "variables": [
+            {
+              "name": "EventData",
+              "type": "array"
+            }
+          ]
+        },
+        "runAfter": {},
+        "type": "InitializeVariable"
+      },
+      "Get_Employee_Events": {
+        "inputs": {
+          "parameters": {
+            "storedProcedureName": "PollingEmployeeDequeue",
+            "storedProcedureParameters": {
+              "EventType": "Employee",
+              "QueryControlStatus": "New",
+              "BatchSize": "@parameters('employeesConfig')?['databaseSubscriber']?['recurrenceTrigger']?['messageBatchSize']"
+            }
+          },
+          "serviceProviderConfiguration": {
+            "connectionName": "sqlServer",
+            "operationId": "executeStoredProcedure",
+            "serviceProviderId": "/serviceProviders/sql"
+          }
+        },
+        "runAfter": {
+          "Initialize_EventData_variable": [
+            "SUCCEEDED"
+          ]
+        },
+        "type": "ServiceProvider"
+      },
+      "Set_EventData_variable": {
+        "inputs": {
+          "name": "EventData",
+          "value": "@json(coalesce(body('Get_Employee_Events')?['ResultSets']?[0]?[0]?['JsonData'], '[]'))"
+        },
+        "runAfter": {
+          "Get_Employee_Events": [
+            "SUCCEEDED"
+          ]
+        },
+        "type": "SetVariable"
+      },
+      "For_each_Event": {
+        "actions": {
+          "Get_Employee_from_DB": {
+            "inputs": {
+              "parameters": {
+                "storedProcedureName": "SelectEmployee",
+                "storedProcedureParameters": {
+                  "EmployeeMessageId": "@item()?['event']?['eventKey']"
+                }
+              },
+              "serviceProviderConfiguration": {
+                "connectionName": "sqlServer",
+                "operationId": "executeStoredProcedure",
+                "serviceProviderId": "/serviceProviders/sql"
+              }
+            },
+            "runAfter": {},
+            "type": "ServiceProvider"
+          },
+          "Compose_EmployeeMessage": {
+            "inputs": {
+              "employeeMessage": "@json(body('Get_Employee_from_DB')?['ResultSets'][0][0]?['EmployeeMessage'])",
+              "employeeMessageId": "@body('Get_Employee_from_DB')?['ResultSets'][0][0]?['EmployeeMessageId']"
+            },
+            "runAfter": {
+              "Get_Employee_from_DB": [
+                "SUCCEEDED"
+              ]
+            },
+            "type": "Compose"
+          },
+          "Upsert_Employee_to_APIM": {
+            "inputs": {
+              "body": "@outputs('Compose_EmployeeMessage')?['employeeMessage']",
+              "headers": {
+                "Content-Type": "application/json",
+                "Ocp-Apim-Subscription-Key": "@appsettings('apimSubscriptionKey')"
+              },
+              "method": "PATCH",
+              "uri": "@{appsetting('apimBaseUrl')}/@{appsetting('employeesApiPath')}/employee/@{encodeURIComponent(outputs('Compose_EmployeeMessage')?['employeeMessage']?['id'])}/role/@{encodeURIComponent(outputs('Compose_EmployeeMessage')?['employeeMessage']?['role'])}"
+            },
+            "runAfter": {
+              "Compose_EmployeeMessage": [
+                "SUCCEEDED"
+              ]
+            },
+            "type": "Http"
+          },
+          "Update_Employee_in_DB": {
+            "inputs": {
+              "parameters": {
+                "storedProcedureName": "UpsertEmployee",
+                "storedProcedureParameters": {
+                  "ControlStatus": "Completed",
+                  "EmployeeMessage": "@{outputs('Compose_EmployeeMessage')?['employeeMessage']}",
+                  "EmployeeMessageId": "@{outputs('Compose_EmployeeMessage')?['employeeMessageId']}",
+                  "Role": "@{outputs('Compose_EmployeeMessage')?['employeeMessage']?['role']}",
+                  "EmployeeId": "@{outputs('Compose_EmployeeMessage')?['employeeMessage']?['id']}"
+                }
+              },
+              "serviceProviderConfiguration": {
+                "connectionName": "sqlServer",
+                "operationId": "executeStoredProcedure",
+                "serviceProviderId": "/serviceProviders/sql"
+              }
+            },
+            "runAfter": {
+              "Upsert_Employee_to_APIM": [
+                "SUCCEEDED"
+              ]
+            },
+            "type": "ServiceProvider"
+          }
+        },
+        "foreach": "@variables('EventData')",
+        "runAfter": {
+          "Set_EventData_variable": [
+            "SUCCEEDED"
+          ]
+        },
+        "type": "Foreach"
+      }
+    },
+    "contentVersion": "1.0.0.0",
+    "outputs": {},
+    "triggers": {
+      "Recurrence": {
+        "recurrence": {
+          "frequency": "@parameters('employeesConfig')?['databaseSubscriber']?['recurrenceTrigger']?['frequency']",
+          "interval": "@parameters('employeesConfig')?['databaseSubscriber']?['recurrenceTrigger']?['interval']"
+        },
+        "runtimeConfiguration": {
+          "concurrency": {
+            "runs": 5,
+            "maximumWaitingRuns": 5
+          }
+        },
+        "type": "Recurrence"
+      }
+    }
+  },
+  "kind": "Stateful"
+}

@@ -1,0 +1,444 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environment": {
+      "type": "string",
+      "defaultValue": "Dev"
+    },
+    "apiName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "defaultValue": "[concat('employees', '-', 'internal', '-', 'api')]",
+      "metadata": {
+        "description": "Name of this API."
+      }
+    },
+    "apiDisplayName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "defaultValue": "Employees Internal API",
+      "metadata": {
+        "description": "Display name for this API."
+      }
+    },
+    "locationName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "locationShortName": {
+      "type": "string",
+      "defaultValue": "[tolower(take(replace(parameters('locationName'), ' ', ''), 3))]"
+    },
+    "instanceNumber": {
+      "type": "string",
+      "defaultValue": "01"
+    },
+    "apimServiceName": {
+      "type": "string",
+      "defaultValue": "[concat('apim', '-', uniqueString(resourceGroup().id), '-', if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), '-', 'core', '-', parameters('locationShortName'), '-', parameters('instanceNumber'))]"
+    },
+    "apimResourceGroupName": {
+      "type": "string",
+      "defaultValue": "[concat('rg', '-', uniqueString(subscription().id), '-', if(equals(toLower(parameters('environment')), 'test'), 'tst', if(equals(toLower(parameters('environment')), 'production'), 'prd', toLower(parameters('environment')))), '-', 'core', '-', parameters('locationShortName'), '-', parameters('instanceNumber'))]",
+      "metadata": {
+        "description": "Name of the Resource Group where the APIM instance is located."
+      }
+    },
+    "cacheTimeout": {
+      "defaultValue": "3600",
+      "type": "string",
+      "metadata": {
+        "description": "Amount of time (in seconds) that config entries are cached for, before they are retrieved again."
+      }
+    },
+    "apimSubscriptionName": {
+      "type": "string",
+      "defaultValue": "employees-internal-api-subscription"
+    },
+    "apimSubscriptionDisplayName": {
+      "type": "string",
+      "defaultValue": "Employees Internal API Subscription"
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {
+        "Environment": "dev"
+      },
+      "metadata": {
+        "description": "Tags for this resource."
+      }
+    }
+  },
+  "variables": {
+    "apiTagName": "[concat(parameters('apiName'), 'tag')]",
+    "apiProductName": "employees-internal-api-product",
+    "apiProductDisplayName": "EmployeesInternalApiProduct",
+    "diagnosticsLoggingType": "allErrors",
+    "diagnosticsSamplingPercentage": "100",
+    "diagnosticsEnableHttpCorrelationHeaders": true,
+    "singleQuote": "'"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ApiManagement/service/apis",
+      "apiVersion": "2019-12-01",
+      "name": "[concat(parameters('apimServiceName'), '/', parameters('apiName'))]",
+      "dependsOn": [
+      ],
+      "properties": {
+        "displayName": "[parameters('apiDisplayName')]",
+        "description": "This API provides operations to allow internal (i.e. LogicApp) services to access the Employees environment.\r\nUse of this API requires that the caller has an IP address within the Azure network, and the correct Subsription Key and Client Certificate.",
+        "apiRevision": "1",
+        "subscriptionRequired": true,
+        "path": "employees/internal",
+        "protocols": [
+          "https"
+        ],
+        "isCurrent": true
+      },
+      "resources": [
+      ]
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/tags",
+      "apiVersion": "2019-12-01",
+      "name": "[concat(parameters('apimServiceName'), '/', variables('apiTagName'))]",
+      "dependsOn": [
+      ],
+      "properties": {
+        "displayName": "[parameters('apiName')]"
+      }
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/apis/tags",
+      "apiVersion": "2019-12-01",
+      "name": "[concat(parameters('apimServiceName'), '/', parameters('apiName'), '/', variables('apiTagName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service/tags', parameters('apimServiceName'), variables('apiTagName'))]",
+        "[resourceId('Microsoft.ApiManagement/service/apis', parameters('apimServiceName'), parameters('apiName'))]"
+      ],
+      "properties": {
+      }
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/products",
+      "apiVersion": "2020-06-01-preview",
+      "name": "[concat(parameters('apimServiceName'), '/', variables('apiProductName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service/apis', parameters('apimServiceName'), parameters('apiName'))]"
+      ],
+      "properties": {
+        "displayName": "[variables('apiProductDisplayName')]",
+        "description": "This product provides support for the Employees Internal API.",
+        "subscriptionRequired": true,
+        "approvalRequired": true,
+        "state": "published"
+      }
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/products/apis",
+      "apiVersion": "2020-06-01-preview",
+      "name": "[concat(parameters('apimServiceName'), '/', variables('apiProductName'), '/', parameters('apiName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service/products', parameters('apimServiceName'), variables('apiProductName'))]",
+        "[resourceId('Microsoft.ApiManagement/service/apis', parameters('apimServiceName'), parameters('apiName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/subscriptions",
+      "apiVersion": "2020-06-01-preview",
+      "name": "[concat(parameters('apimServiceName'), '/', parameters('apimSubscriptionName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service/products', parameters('apimServiceName'), variables('apiProductName'))]"
+      ],
+      "properties": {
+        "ownerId": "[resourceId('Microsoft.ApiManagement/service/users', parameters('apimServiceName'), '1')]",
+        "scope": "[resourceId('Microsoft.ApiManagement/service/products', parameters('apimServiceName'), variables('apiProductName'))]",
+        "state": "active",
+        "allowTracing": true,
+        "displayName": "[parameters('apimSubscriptionDisplayName')]"
+      }
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/apis/operations",
+      "apiVersion": "2019-12-01",
+      "name": "[concat(parameters('apimServiceName'), '/', parameters('apiName'), '/upsertemployee')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service/apis', parameters('apimServiceName'), parameters('apiName'))]",
+        "[resourceId('Microsoft.ApiManagement/service/apis/schemas', parameters('apimServiceName'), parameters('apiName'), 'CanonicalSchemas')]"
+      ],
+      "properties": {
+        "displayName": "UpsertEmployee",
+        "description": "Upserts a new Employee.",
+        "method": "PATCH",
+        "urlTemplate": "/employees/{employeeId}/{role}",
+        "templateParameters": [
+          {
+            "name": "employeeId",
+            "description": "ID of the Employee to upsert.",
+            "type": "string",
+            "required": true,
+            "values": [
+            ]
+          },
+          {
+            "name": "role",
+            "description": "Role of the Employee to upsert.",
+            "type": "string",
+            "required": true,
+            "values": [
+            ]
+          }
+        ],
+        "request": {
+          "description": "Details of the Employee.",
+          "queryParameters": [
+          ],
+          "headers": [
+            {
+              "name": "Tracking-Id",
+              "description": "Tracking ID used to link disparate messages together.",
+              "type": "string",
+              "required": false,
+              "defaultValue": ""
+            }
+          ],
+          "representations": [
+            {
+              "contentType": "text/json",
+              "sample": ""
+            },
+            {
+              "contentType": "application/json",
+              "sample": ""
+            }
+          ]
+        },
+        "responses": [
+          {
+            "statusCode": 200,
+            "description": "Successfully upserted an Employee.",
+            "representations": [
+              {
+                "contentType": "text/json",
+                "sample": "{\r\n\t\"trackingId\": \"0A437B69-09FC-4D5B-B292-AC76BB72BF7D\",\r\n\t\"status\": \"Accepted\",\r\n\t\"code\": \"201\",\r\n\t\"callbackUrl\": \"\"\r\n}",
+                "schemaId": "CanonicalSchemas",
+                "typeName": "AcceptedResponse"
+              },
+              {
+                "contentType": "application/json",
+                "sample": "{\r\n\t\"trackingId\": \"0A437B69-09FC-4D5B-B292-AC76BB72BF7D\",\r\n\t\"status\": \"Accepted\",\r\n\t\"code\": \"201\",\r\n\t\"callbackUrl\": \"\"\r\n}",
+                "schemaId": "CanonicalSchemas",
+                "typeName": "AcceptedResponse"
+              },
+              {
+                "contentType": "application/*+json",
+                "sample": "{\r\n\t\"trackingId\": \"0A437B69-09FC-4D5B-B292-AC76BB72BF7D\",\r\n\t\"status\": \"Accepted\",\r\n\t\"code\": \"201\",\r\n\t\"callbackUrl\": \"\"\r\n}",
+                "schemaId": "CanonicalSchemas",
+                "typeName": "AcceptedResponse"
+              }
+            ],
+            "headers": []
+          },
+          {
+            "statusCode": 500,
+            "description": "An internal error has occurred.",
+            "representations": [
+              {
+                "contentType": "text/json",
+                "sample": "{\r\n\t\"fault\": {\r\n\t\t\"faultActor\": \"\",\r\n\t\t\"faultCategory\": \"Error\",\r\n\t\t\"faultCode\": \"500\",\r\n\t\t\"faultMessage\": \"\",\r\n\t\t\"faultReason\": \"\"\r\n\t}\r\n}",
+                "schemaId": "CanonicalSchemas",
+                "typeName": "FaultResponse"
+              },
+              {
+                "contentType": "application/json",
+                "sample": "{\r\n\t\"fault\": {\r\n\t\t\"faultActor\": \"\",\r\n\t\t\"faultCategory\": \"Error\",\r\n\t\t\"faultCode\": \"500\",\r\n\t\t\"faultMessage\": \"\",\r\n\t\t\"faultReason\": \"\"\r\n\t}\r\n}",
+                "schemaId": "CanonicalSchemas",
+                "typeName": "FaultResponse"
+              },
+              {
+                "contentType": "application/*+json",
+                "sample": "{\r\n\t\"fault\": {\r\n\t\t\"faultActor\": \"\",\r\n\t\t\"faultCategory\": \"Error\",\r\n\t\t\"faultCode\": \"500\",\r\n\t\t\"faultMessage\": \"\",\r\n\t\t\"faultReason\": \"\"\r\n\t}\r\n}",
+                "schemaId": "CanonicalSchemas",
+                "typeName": "FaultResponse"
+              }
+            ],
+            "headers": []
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/apis/schemas",
+      "apiVersion": "2020-06-01-preview",
+      "name": "[concat(parameters('apimServiceName'), '/', parameters('apiName'), '/CanonicalSchemas')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service/apis', parameters('apimServiceName'), parameters('apiName'))]"
+      ],
+      "properties": {
+        "contentType": "application/vnd.oai.openapi.components+json",
+        "document": {
+          "components": {
+            "schemas": {
+              "FaultResponse": {
+                "$schema": "http://json-schema.org/draft/2020-12/schema",
+                "$id": "http://schemas.affinus.com/azure/employees/faultresponse.json",
+                "type": "object",
+                "default": {},
+                "description": "Fault Response Schema",
+                "title": "Fault Response",
+                "required": [],
+                "properties": {
+                  "fault": {
+                    "type": "object",
+                    "properties": {
+                      "faultActor": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "The component that raised this fault",
+                        "title": "Fault Actor"
+                      },
+                      "faultCategory": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "The category for this fault",
+                        "title": "Fault Category"
+                      },
+                      "faultCode": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "The code for this fault",
+                        "title": "Fault Code"
+                      },
+                      "faultMessage": {
+                        "type": "string",
+                        "nullable": false,
+                        "description": "The message for this fault",
+                        "title": "Fault Message"
+                      },
+                      "faultReason": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "The reason for this fault",
+                        "title": "Fault Reason"
+                      },
+                      "additionalDetails": {
+                        "type": [ "string", "object", "null" ],
+                        "nullable": true,
+                        "description": "Optional additional details",
+                        "title": "Additional Details"
+                      },
+                      "innerFault": {
+                        "type": "object",
+                        "nullable": true,
+                        "description": "If this fault was caused by another inner fault, the inner fault will be provided here",
+                        "title": "Inner Fault details",
+                        "properties": {
+                          "faultActor": {
+                            "type": "string",
+                            "nullable": true,
+                            "description": "The component that raised this fault",
+                            "title": "Fault Actor"
+                          },
+                          "faultCategory": {
+                            "type": "string",
+                            "nullable": true,
+                            "description": "The category for this fault",
+                            "title": "Fault Category"
+                          },
+                          "faultCode": {
+                            "type": "string",
+                            "nullable": true,
+                            "description": "The code for this fault",
+                            "title": "Fault Code"
+                          },
+                          "faultMessage": {
+                            "type": "string",
+                            "nullable": false,
+                            "description": "The message for this fault",
+                            "title": "Fault Message"
+                          },
+                          "faultReason": {
+                            "type": "string",
+                            "nullable": true,
+                            "description": "The reason for this fault",
+                            "title": "Fault Reason"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "fault": {
+                    "faultActor": "GetContact",
+                    "faultCategory": "Error",
+                    "faultCode": "500",
+                    "faultMessage": "Unable to connect to Employees",
+                    "faultReason": "Invalid Credentials"
+                  }
+                }
+              },
+              "AcceptedResponse": {
+                "$schema": "http://json-schema.org/draft/2019-09/schema",
+                "$id": "http://schemas.affinus.com/azure/employees/acceptedresponse.json",
+                "type": "object",
+                "default": {},
+                "description": "Accepted Response Schema",
+                "title": "Accepted Response",
+                "required": [],
+                "properties": {
+                  "trackingId": {
+                    "type": "string",
+                    "default": "",
+                    "description": "The unique trackingId for this response",
+                    "title": "Tracking ID",
+                    "examples": [
+                      "43499de8-694d-4e86-9225-7131210e2c5e"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "The status text for this response",
+                    "title": "Status Text",
+                    "examples": [
+                      "OK"
+                    ]
+                  },
+                  "code": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "The status code for this response",
+                    "title": "Status Code",
+                    "examples": [
+                      "200"
+                    ]
+                  },
+                  "callbackUrl": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "The callbackUrl for this response (if this is an async flow)",
+                    "title": "Callback URL",
+                    "examples": [
+                      ""
+                    ]
+                  }
+                },
+                "example": {
+                  "trackingId": "0A437B69-09FC-4D5B-B292-AC76BB72BF7D",
+                  "status": "Accepted",
+                  "code": "201",
+                  "callbackUrl": ""
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
