@@ -7,10 +7,13 @@
           "body": "@triggerBody()?['contentData']",
           "headers": {
             "Content-Type": "application/json",
-            "Ocp-Apim-Subscription-Key": "@appsettings('apimSubscriptionKey')"
+            "Ocp-Apim-Subscription-Key": "@appsetting('apimSubscriptionKey')"
+          },
+          "retryPolicy": {
+            "type": "none"
           },
           "method": "PATCH",
-          "uri": "@{appsetting('apimBaseUrl')}/@{appsetting('employeesApiPath')}/employee/@{encodeURIComponent(triggerBody()?['contentData']?['id'])}/role/@{encodeURIComponent(triggerBody()?['contentData']?['role'])}"
+          "uri": "@{appsetting('apimBaseUrl')}/@{appsetting('employeesApiPath')}/employees/@{encodeURIComponent(triggerBody()?['contentData']?['id'])}/@{encodeURIComponent(triggerBody()?['contentData']?['role'])}"
         },
         "runAfter": {},
         "type": "Http"
@@ -23,8 +26,8 @@
         "inputs": {
           "parameters": {
             "isSessionsEnabled": false,
-            "subscriptionName": "@{coalesce(parameters('employeesConfig')?['subscriptionName'], '(Subscription Name not set)')}",
-            "topicName": "@{coalesce(parameters('employeesConfig')?['topicName'], '(Topic Name not set)')}"
+            "subscriptionName": "@{coalesce(parameters('employeesConfig')?['serviceBusSubscriber']?['subscriptionName'], '(Subscription Name not set)')}",
+            "topicName": "@{coalesce(parameters('employeesConfig')?['serviceBusSubscriber']?['topicName'], '(Topic Name not set)')}"
           },
           "serviceProviderConfiguration": {
             "connectionName": "serviceBusSubscribe",

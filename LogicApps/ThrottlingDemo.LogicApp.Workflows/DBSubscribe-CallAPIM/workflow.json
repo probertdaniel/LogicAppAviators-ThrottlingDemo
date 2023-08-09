@@ -85,10 +85,13 @@
               "body": "@outputs('Compose_EmployeeMessage')?['employeeMessage']",
               "headers": {
                 "Content-Type": "application/json",
-                "Ocp-Apim-Subscription-Key": "@appsettings('apimSubscriptionKey')"
+                "Ocp-Apim-Subscription-Key": "@appsetting('apimSubscriptionKey')"
+              },
+              "retryPolicy": {
+                "type": "none"
               },
               "method": "PATCH",
-              "uri": "@{appsetting('apimBaseUrl')}/@{appsetting('employeesApiPath')}/employee/@{encodeURIComponent(outputs('Compose_EmployeeMessage')?['employeeMessage']?['id'])}/role/@{encodeURIComponent(outputs('Compose_EmployeeMessage')?['employeeMessage']?['role'])}"
+              "uri": "@{appsetting('apimBaseUrl')}/@{appsetting('employeesApiPath')}/employees/@{encodeURIComponent(outputs('Compose_EmployeeMessage')?['employeeMessage']?['id'])}/@{encodeURIComponent(outputs('Compose_EmployeeMessage')?['employeeMessage']?['role'])}"
             },
             "runAfter": {
               "Compose_EmployeeMessage": [

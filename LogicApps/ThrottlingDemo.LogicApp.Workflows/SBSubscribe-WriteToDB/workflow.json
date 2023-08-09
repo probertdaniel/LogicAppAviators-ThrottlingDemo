@@ -32,8 +32,8 @@
         "inputs": {
           "parameters": {
             "isSessionsEnabled": false,
-            "subscriptionName": "@{coalesce(parameters('employeesConfig')?['subscriptionName'], '(Subscription Name not set)')}",
-            "topicName": "@{coalesce(parameters('employeesConfig')?['topicName'], '(Topic Name not set)')}"
+            "subscriptionName": "@{coalesce(parameters('employeesConfig')?['serviceBusSubscriber']?['subscriptionName'], '(Subscription Name not set)')}",
+            "topicName": "@{coalesce(parameters('employeesConfig')?['serviceBusSubscriber']?['topicName'], '(Topic Name not set)')}"
           },
           "serviceProviderConfiguration": {
             "connectionName": "serviceBusSubscribe",
